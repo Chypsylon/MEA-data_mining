@@ -4,8 +4,13 @@ var inventoryDefinitions = JSON.parse(fs.readFileSync('download/inventory_defini
 var weaponsData = extractWeaponsData(inventoryDefinitions);
 var weaponsCsvString = dataListToCsvString(weaponsData);
 
-var fileName = "weapons-" + (new Date()).toISOString() + ".csv";
-writeDataToCsvFile(weaponsCsvString, fileName);
+writeDataToCsvFile(weaponsCsvString, "weapons-" + (new Date()).toISOString() + ".csv");
+
+var modsData = extractModsData(inventoryDefinitions);
+var modsCsvString = dataListToCsvString(modsData);
+
+writeDataToCsvFile(modsCsvString, "mods-" + (new Date()).toISOString() + ".csv");
+
 
 function extractWeaponsData(inventoryDefinitions, categories) {
     categories = categories || ["1:SniperRifle", "1:AssaultRifle", "1:Pistol", "1:Shotgun"];
@@ -27,16 +32,16 @@ function extractWeaponsData(inventoryDefinitions, categories) {
 
     var data = [baseHeaders.concat(statsHeaders)];
 
-    weapons.forEach((element) => {
+    weapons.forEach((weapon) => {
         var row = [];
 
         baseHeaders.forEach((x) => {
-            row.push(element[x]);
+            row.push(weapon[x]);
         });
 
         statsHeaders.forEach((x) => {
-            if (element.customAttributes.hasOwnProperty(x)) {
-                row.push(element.customAttributes[x]);
+            if (weapon.customAttributes.hasOwnProperty(x)) {
+                row.push(weapon.customAttributes[x]);
             } else {
                 row.push(" ");
             }
@@ -57,18 +62,61 @@ function extractModsData(inventoryDefinitions, categories) {
 
     var baseHeaders = ["category", "locName", "rarity", "droppable", "cap", "locDescription"];
 
-    //TODO: better to extract the stat headers directly from the customAttributes json and blacklist unwanted keys (e.g. UnlockedTextureId, LockedTextureId, 1 ... 10, longDescription)
-    
-    var extraAttributesHeaders = ["itemPartType"];
+    var data = [];
 
-    var statsPerLevel = ["Base Weapon Damage", "Weapon Damage", "Base Clip Size", "Clip Size", "Base Penetration Damage", "Penetration Damage Mod", "Base Penetration Distance", "Penetration Distance", "Base Weapon Accuracy", "Weapon Accuracy", "Base Weapon Stabolity", "Weapon Stability", "Base Melee Damage", "Melee Damage", "Base Pellet Spread", "Pellet Spread", "Base Max Ammo", "Max Ammo", "Base Encumbrance Reduction", "Encumbrance Reduction"];
+    mods.forEach((mod) => {
+        var modData = [];
+        baseHeaders.forEach((header) => {
+            modData.push([header, mod[header]]);
+        });
 
-    var statsHeaders = [];
-    statsPerLevel.forEach((stat) => {
-        for (var lvl = 1; lvl <= 10; lvl++) {
-            statsHeaders.push(lvl + "_" + stat);
+        var attributes = Object.keys(mod.customAttributes).filter((attr) => {
+            if (attr.includes("TextureId") || attr === "longDescription" || /^\d+$/.test(attr)) {
+                return false;
+            }
+            return true;
+        });
+
+        var extraAttributes = new Set();
+
+        attributes.forEach((attr) => {
+            if (/^\d+_.+$/.test(attr)) {
+                extraAttributes.add(attr.substring(attr.indexOf("_") +1));
+            } else {
+                modData.push([attr, mod.customAttributes[attr]]);
+            }
+        });
+
+        var extraAttributesData = [];
+
+        for (let attr of extraAttributes) {
+            var lvlHeader = [];
+            var lvlDataRow = []
+
+            for (var lvl = 1; lvl <= 10; lvl++) {
+                var attrLvl = lvl + "_" + attr;
+                if (mod.customAttributes.hasOwnProperty(attrLvl)) {
+                    lvlHeader.push(attrLvl);
+                    lvlDataRow.push(mod.customAttributes[attrLvl]);
+                }
+            }
+
+            extraAttributesData.push(lvlHeader);
+            extraAttributesData.push(lvlDataRow);
         }
+
+        for (var i = 0; i < extraAttributesData.length; i++) {
+            modData[i] = modData[i].concat(extraAttributesData[i]);
+        }
+
+        modData.push([""]);
+        modData.push([""]);
+        modData.push([""]);
+
+        data = data.concat(modData);
     });
+
+    return data;
 }
 
 /**
